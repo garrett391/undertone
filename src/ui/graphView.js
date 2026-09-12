@@ -432,6 +432,13 @@ export function createGraphView(container, handlers = {}) {
     run.call(zoom.translateTo, n.x, n.y, [cx, cy]);
   }
 
+  // Pans by screen pixels, keeping the current zoom. Used when the space
+  // available to the map changes, so what you were looking at stays in view.
+  function nudge(dx, dy) {
+    const run = reduceMotion ? svg : svg.transition().duration(280).ease(d3.easeCubicOut);
+    run.call(zoom.translateBy, dx / transform.k, dy / transform.k);
+  }
+
   function zoomBy(factor) {
     const run = reduceMotion ? svg : svg.transition().duration(250);
     run.call(zoom.scaleBy, factor);
@@ -444,6 +451,7 @@ export function createGraphView(container, handlers = {}) {
     fit,
     focusNode,
     zoomBy,
+    nudge,
     clear() {
       nodes = [];
       links = [];

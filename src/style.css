@@ -445,6 +445,10 @@ svg.map.picking .node {
 
 /* ---------- Panel ---------- */
 
+.sheet-handle {
+  display: none;
+}
+
 .panel {
   position: fixed;
   top: 20px;
@@ -1018,15 +1022,81 @@ dialog .hint {
     left: 0;
     right: 0;
     bottom: 0;
+    flex-direction: column;
     width: auto;
-    height: 44dvh;
+    height: var(--sheet-h, 44dvh);
     border-bottom: 0;
     border-radius: 20px 20px 0 0;
+    transition: height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .panel.dragging,
+  .panel.no-anim {
+    transition: none;
+  }
+
+  /* The grab strip. Generous hit area, small visible grip. */
+  .sheet-handle {
+    display: grid;
+    flex: none;
+    place-items: center;
+    height: 28px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .sheet-handle:active {
+    cursor: grabbing;
+  }
+
+  .sheet-grip {
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--line-strong);
+    transition: background 0.15s;
+  }
+
+  .sheet-handle:hover .sheet-grip,
+  .sheet-handle:focus-visible .sheet-grip {
+    background: var(--line-focus);
+  }
+
+  .sheet-handle:focus-visible {
+    outline: none;
+  }
+
+  .panel-body {
+    padding-top: 12px;
+  }
+
+  /* At peek only the title shows; scrolling a sliver would be confusing. */
+  .panel[data-sheet='peek'] .panel-body {
+    overflow: hidden;
   }
 
   .map-controls {
     left: 12px;
-    bottom: calc(44dvh + 12px);
+    bottom: calc(var(--sheet-h, 44dvh) + 12px);
+    transition:
+      bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.2s;
+  }
+
+  /* With the sheet fully up there's no map to zoom, and the controls would
+     otherwise land on top of the search bar. */
+  body:has(.panel[data-sheet='full']:not(.dragging)) .map-controls {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  body:has(.panel.dragging) .map-controls,
+  body:has(.panel.no-anim) .map-controls,
+  body:has(.panel.dragging) .status,
+  body:has(.panel.no-anim) .status {
+    transition: none;
   }
 
   .legend {
@@ -1036,7 +1106,13 @@ dialog .hint {
   .status {
     left: 12px;
     right: 12px;
-    bottom: calc(44dvh + 64px);
+    /* Rides above the sheet, but never higher than just under the top bar. */
+    bottom: min(calc(var(--sheet-h, 44dvh) + 64px), calc(100dvh - 190px));
+    transition: bottom 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  body:has(#controls[hidden]) .status {
+    bottom: 12px;
   }
 
   .empty {

@@ -20,6 +20,7 @@ import { createSearch } from './ui/search.js';
 import { createPanel } from './ui/panel.js';
 import { createStatus } from './ui/status.js';
 import { createSettings } from './ui/settings.js';
+import { createSheet } from './ui/sheet.js';
 import { icons, formatList } from './ui/dom.js';
 import { createSpectrum } from './graph/color.js';
 
@@ -79,6 +80,16 @@ const search = createSearch($('search'), {
 });
 
 const settings = createSettings({ onKeySaved: start });
+
+// On phones the panel is a bottom sheet. When it snaps to a new height, the
+// map's usable area changes, so the insets update and the view slides by half
+// the difference to keep what you were looking at centered in the new space.
+const sheet = createSheet($('panel'), {
+  onSnap({ from, to }) {
+    updateInsets();
+    if (app.graph) view.nudge(0, -(to - from) / 2);
+  },
+});
 
 // ---------- Routing ----------
 // Maps live in the URL, so the browser's back button works and maps can be bookmarked.
@@ -205,6 +216,7 @@ async function load(route) {
   const titles = titlesFor(route);
   setTitles(titles);
   panel.showLoading(titles.title, titles.subtitle);
+  sheet.reveal();
   updateInsets();
 
   const ctx = {
@@ -414,6 +426,7 @@ function showPathPanel() {
   if (!app.path) return;
   app.selectedId = null;
   app.pathShown = true;
+  sheet.reveal();
   view.select(null);
   view.setPath(app.path);
   panel.showPath({
@@ -466,6 +479,7 @@ function selectNode(id, { focus = false, keepPath = false } = {}) {
   }
   app.selectedId = id;
   view.select(id);
+  sheet.reveal();
   if (focus) view.focusNode(id);
   const node = app.graph.getNodeAttributes(id);
   const relation = relationText(id, node);
@@ -624,7 +638,8 @@ function updateInsets() {
   view.setInset(
     wide
       ? { top: header.bottom + 8, right: panelBox ? window.innerWidth - panelBox.left : 0, bottom: 40, left: 0 }
-      : { top: header.bottom, right: 0, bottom: panelBox ? window.innerHeight - panelBox.top : 0, left: 0 },
+      : // The sheet's target height, not its rect, which is stale mid-animation.
+        { top: header.bottom, right: 0, bottom: sheet.heightPx(), left: 0 },
   );
 }
 window.addEventListener('resize', updateInsets);

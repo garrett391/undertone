@@ -29,6 +29,7 @@ If you'd rather not paste the key, copy `.env.example` to `.env.local` and fill 
 - **Double-click** a node (or use "Show more like this") to grow the map outward from it.
 - **Show me something different** jumps to the node farthest from the one you selected.
 - Click a tag on any artist or song to explore that vibe. Click a song under "Popular songs" to switch to a song map.
+- On a phone, the details panel is a bottom sheet. Drag the grip at its top to resize it, or tap the grip to collapse it to just the title and get most of the screen back for the map. It rests at three heights: peek, half, and full. Selecting something brings it back up from peek; tapping empty map doesn't.
 - Press `/` to jump to search and `Esc` to clear a selection. The browser's back button works, and every map has its own URL you can bookmark.
 
 ### Paths
@@ -81,6 +82,7 @@ src/
     graphView.js   D3 rendering, force layout, zoom, hover, labels
     search.js      Search box with artist, song, and vibe results
     panel.js       Details panel
+    sheet.js       Bottom-sheet behavior for the panel on small screens
     settings.js    API key dialog
     status.js      Status line
     dom.js         Small DOM helper and icons
@@ -96,7 +98,6 @@ src/
 
 ## Next steps
 
-- **Next:** Collapsible detail panel on mobile. The bottom sheet takes 44% of the screen, and there's no way to get it out of the way to see more of the map. Wants a drag handle with snap points (peek / half / full), the map insets updating as it moves.
 - **Small:** The seed node's label always draws, even when it overlaps a neighbor — it skips the collision check in `updateLabels` so it can never be hidden. It should push nearby labels aside instead.
 - **Next:** Show play counts alongside the artist name in song search results. Last.fm's `track.search` already returns `listeners`, so this is small — it's used for artist results but not song ones today. It makes duplicates easy to tell apart: "DENIAL IS A RIVER" vs. "DENIAL IS A RIVER [Explicit]" vs. a one-off upload. Later, Spotify's ISRC codes can merge them outright.
 - **Next:** Turn a path into a playlist. A finished route is already an ordered list of songs, so it wants a "Create playlist" button (saved to Spotify via the Create Playlist endpoint) and an "Add to queue" for listening right away. Needs v2's Spotify login first.
