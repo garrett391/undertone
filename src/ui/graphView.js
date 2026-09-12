@@ -119,6 +119,7 @@ export function createGraphView(container, handlers = {}) {
     })
     .on('end', (event, d) => {
       if (!event.active) sim.alphaTarget(0);
+      if (d.pinned) return; // Anchored ends stay where they're dropped.
       d.fx = null;
       d.fy = null;
     });
@@ -139,9 +140,16 @@ export function createGraphView(container, handlers = {}) {
     byId = new Map();
     nodes = graph.mapNodes((id, attrs) => {
       const node = previous.get(id) || { id };
+      const hadAnchor = node.anchor;
       Object.assign(node, attrs);
       node.r = attrs.seed ? 15 : 5 + (attrs.score ?? 0.3) * 9;
-      if (node.x == null) placeNear(node, graph, previous);
+      if (node.x == null || (attrs.anchor && !hadAnchor)) placeNear(node, graph, previous);
+      if (!attrs.anchor && node.pinned) {
+        node.anchor = undefined;
+        node.pinned = false;
+        node.fx = null;
+        node.fy = null;
+      }
       byId.set(id, node);
       return node;
     });
@@ -170,13 +178,22 @@ export function createGraphView(container, handlers = {}) {
   }
 
   function placeNear(node, graph, previous) {
-    const anchor = graph
+    // Path maps have two anchored ends, pinned apart so the route reads across the map.
+    if (node.anchor) {
+      node.x = node.anchor === 'start' ? -230 : 230;
+      node.y = 0;
+      node.fx = node.x;
+      node.fy = node.y;
+      node.pinned = true;
+      return;
+    }
+    const near = graph
       .neighbors(node.id)
       .map((id) => previous.get(id) || byId.get(id))
       .find((n) => n && n.x != null);
-    if (anchor) {
-      node.x = anchor.x + (Math.random() - 0.5) * 50;
-      node.y = anchor.y + (Math.random() - 0.5) * 50;
+    if (near) {
+      node.x = near.x + (Math.random() - 0.5) * 50;
+      node.y = near.y + (Math.random() - 0.5) * 50;
     } else if (node.seed) {
       node.x = 0;
       node.y = 0;
@@ -304,6 +321,7 @@ export function createGraphView(container, handlers = {}) {
       }
     }
 
+    svg.classed('showing-path', Boolean(path));
     nodeSel
       .classed('dim', (d) => Boolean(active && !active.has(d.id)))
       .classed('selected', (d) => d.id === selectedId)

@@ -4,7 +4,10 @@ import { h, icons, formatCount } from './dom.js';
 const MAX_TAGS = 4;
 const STARTER_VIBES = ['chill', 'ambient', 'melancholic', 'dreamy', 'atmospheric', 'mellow', 'rainy day', 'energetic'];
 
-export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, getVocabulary }) {
+export function createSearch(root, { onPickArtist, onPickTrack, onPickNode, onPickEnd, onTagsChange, getVocabulary, findOnMap }) {
+  // 'browse' is the normal state. In 'pickEnd', a choice becomes the far end of
+  // a path instead of a new map, so vibes are hidden and the wording changes.
+  let mode = 'browse';
   let tags = [];
   let options = [];
   let activeIndex = -1;
@@ -98,6 +101,29 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
     }
   }
 
+  const flatten = (s) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '');
+
+  const keyOf = (item) => `${flatten(item.name)}|${flatten(item.artist || '')}`;
+
+  // Nodes already drawn on the canvas. These need no network call, so they can
+  // be shown the moment you type — useful on a dense map, or on touch where
+  // there's no hover.
+  function mapOptions(query) {
+    const q = flatten(query);
+    return (findOnMap?.(q) || []).map((n) => ({
+      type: 'node',
+      id: n.id,
+      name: n.label,
+      artist: n.artist,
+      primary: n.label,
+      secondary: n.artist || '',
+    }));
+  }
+
   function vibeOptions(query) {
     const vocab = getVocabulary();
     const q = query.toLowerCase();
@@ -121,7 +147,7 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
     const id = ++requestId;
 
     if (query.length < 2) {
-      const vibes = tags.length < MAX_TAGS ? vibeOptions('') : [];
+      const vibes = mode === 'browse' && tags.length < MAX_TAGS ? vibeOptions('') : [];
       if (document.activeElement === input && vibes.length) {
         renderGroups([{ label: tags.length ? 'Add to your vibe' : 'Try a vibe', items: vibes }]);
       } else {
@@ -130,8 +156,12 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
       return;
     }
 
-    const vibeGroup = { label: 'Vibes', items: tags.length < MAX_TAGS ? vibeOptions(query) : [] };
-    renderGroups([vibeGroup], 'Searching…');
+    const mapGroup = { label: 'On this map', items: mapOptions(query) };
+    const vibeGroup = {
+      label: 'Vibes',
+      items: mode === 'browse' && tags.length < MAX_TAGS ? vibeOptions(query) : [],
+    };
+    renderGroups([mapGroup, vibeGroup], 'Searching…');
 
     try {
       const [artists, tracks] = await Promise.all([lf.searchArtists(query, 4), lf.searchTracks(query, 4)]);
@@ -149,8 +179,13 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
         label: 'Songs',
         items: tracks.map((t) => ({ type: 'track', name: t.name, artist: t.artist, primary: t.name, secondary: t.artist })),
       };
+      const onMap = new Set(mapGroup.items.map(keyOf));
+      artistGroup.items = artistGroup.items.filter((i) => !onMap.has(keyOf(i)));
+      songGroup.items = songGroup.items.filter((i) => !onMap.has(keyOf(i)));
+
       const exactVibe = getVocabulary().includes(query.toLowerCase());
-      const groups = exactVibe ? [vibeGroup, artistGroup, songGroup] : [artistGroup, songGroup, vibeGroup];
+      const rest = exactVibe ? [vibeGroup, artistGroup, songGroup] : [artistGroup, songGroup, vibeGroup];
+      const groups = [mapGroup, ...rest];
       const empty = groups.every((g) => !g.items.length);
       renderGroups(groups, empty ? `Nothing on Last.fm matches “${query}”.` : null);
     } catch (err) {
@@ -172,6 +207,16 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
     clearButton.hidden = true;
     setOpen(false);
     input.blur();
+
+    if (mode === 'pickEnd') {
+      onPickEnd(
+        item.type === 'node'
+          ? { kind: item.artist ? 'track' : 'artist', name: item.name, artist: item.artist, id: item.id }
+          : { kind: item.type === 'artist' ? 'artist' : 'track', name: item.name, artist: item.artist },
+      );
+      return;
+    }
+    if (item.type === 'node') onPickNode(item.id);
     if (item.type === 'artist') onPickArtist(item.name);
     if (item.type === 'track') onPickTrack(item.artist, item.name);
   }
@@ -233,6 +278,19 @@ export function createSearch(root, { onPickArtist, onPickTrack, onTagsChange, ge
 
   return {
     setTags,
+    setMode(next) {
+      mode = next;
+      input.placeholder =
+        next === 'pickEnd' ? 'Search for the other end of the path' : 'Search artists, songs, or a vibe';
+      input.setAttribute('aria-label', input.placeholder);
+      // Switching modes changes what a search means, so any half-typed query goes.
+      input.value = '';
+      clearButton.hidden = true;
+      setOpen(false);
+      // On touch, focusing would raise the keyboard over the map the person is
+      // about to tap, so the search bar waits to be reached for.
+      if (next === 'pickEnd' && !window.matchMedia('(pointer: coarse)').matches) input.focus();
+    },
     clearText() {
       input.value = '';
       clearButton.hidden = true;

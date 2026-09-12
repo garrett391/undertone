@@ -53,6 +53,7 @@ export function createPanel(root, actions) {
       map.subtitle ? h('p', { class: 'panel-sub', text: map.subtitle }) : null,
       h('p', { class: 'meta', text: map.stats }),
       map.note ? h('p', { class: 'note', text: map.note }) : null,
+      map.action ? h('div', { class: 'actions' }, button(map.action.label, map.action.onClick)) : null,
       bridges.length
         ? h(
             'section',
@@ -213,14 +214,16 @@ export function createPanel(root, actions) {
 
   // ---------- Paths ----------
 
-  function showPath({ from, to, steps, kindPlural }) {
+  function showPath({ from, to, steps, kindPlural, note }) {
     detailToken++;
     show(
       h('h2', { class: 'panel-title', text: `From ${from} to ${to}` }),
       h('p', {
         class: 'meta',
-        text: `${steps.length - 1} ${steps.length === 2 ? 'step' : 'steps'}, following the strongest connections between ${kindPlural}.`,
+        // Counting what's in the list, since for songs the list is a running order.
+        text: `${steps.length} ${kindPlural}, following the strongest connections between them.`,
       }),
+      note ? h('p', { class: 'note', text: note }) : null,
       h(
         'ol',
         { class: 'path-list' },

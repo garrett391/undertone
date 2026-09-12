@@ -120,6 +120,19 @@ svg.map.picking .node {
   opacity: 0.16;
 }
 
+/* A path is meant to be seen in context, so its surroundings stay legible. */
+.map.showing-path .node.dim {
+  opacity: 0.34;
+}
+
+.map.showing-path .halos circle.dim {
+  opacity: 0.12;
+}
+
+.map.showing-path .edges line.dim {
+  stroke-opacity: 0.08;
+}
+
 .node .core {
   stroke: var(--night);
   stroke-width: 1.5;
@@ -414,9 +427,14 @@ svg.map.picking .node {
   gap: 4px;
   width: fit-content;
   max-width: 100%;
-  margin-left: -6px;
   color: var(--mist);
   font-size: 14px;
+}
+
+/* Pulls the icon's own padding back so the title lines up with the search box
+   whether or not there's somewhere to go back to. */
+#back {
+  margin-left: -6px;
 }
 
 #map-title {

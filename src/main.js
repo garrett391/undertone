@@ -1,6 +1,16 @@
 import './style.css';
 import * as lf from './api/lastfm.js';
-import { buildArtistMap, buildTrackMap, buildVibeMap, expandNode, StaleError, EmptyMapError } from './graph/build.js';
+import {
+  buildArtistMap,
+  buildTrackMap,
+  buildVibeMap,
+  buildPathMap,
+  expandNode,
+  StaleError,
+  EmptyMapError,
+  PathNotFoundError,
+  PATH_BUDGET,
+} from './graph/build.js';
 import { analyze, smoothestPath, farthestFrom, hopsBetween } from './graph/analysis.js';
 import { createGraphView } from './ui/graphView.js';
 import { createSearch } from './ui/search.js';
@@ -53,6 +63,9 @@ const panel = createPanel($('panel'), {
 const search = createSearch($('search'), {
   onPickArtist: openArtist,
   onPickTrack: openTrack,
+  onPickNode: (id) => selectNode(id, { focus: true }),
+  onPickEnd: finishPathWith,
+  findOnMap,
   onTagsChange: (tags) => {
     if (tags.length) navigate({ type: 'vibe', tags });
     else if (app.route?.type === 'vibe') location.hash = '';
@@ -67,10 +80,21 @@ const settings = createSettings({ onKeySaved: start });
 
 const enc = encodeURIComponent;
 
+const endpointToPath = (ep) =>
+  ep.kind === 'artist' ? `artist/${enc(ep.name)}` : `song/${enc(ep.artist)}/${enc(ep.name)}`;
+
 function routeToHash(route) {
   if (route.type === 'artist') return `#artist/${enc(route.name)}`;
   if (route.type === 'track') return `#song/${enc(route.artist)}/${enc(route.name)}`;
+  if (route.type === 'path') return `#path/${endpointToPath(route.from)}/to/${endpointToPath(route.to)}`;
   return `#vibe/${route.tags.map(enc).join('/')}`;
+}
+
+// Reads one endpoint out of a hash, returning it and where the next one starts.
+function readEndpoint(parts, i) {
+  if (parts[i] === 'artist' && parts[i + 1]) return [{ kind: 'artist', name: parts[i + 1] }, i + 2];
+  if (parts[i] === 'song' && parts[i + 2]) return [{ kind: 'track', artist: parts[i + 1], name: parts[i + 2] }, i + 3];
+  return [null, i];
 }
 
 function hashToRoute(hash) {
@@ -82,6 +106,14 @@ function hashToRoute(hash) {
   }
   if (parts[0] === 'artist' && parts[1]) return { type: 'artist', name: parts[1] };
   if (parts[0] === 'song' && parts[2]) return { type: 'track', artist: parts[1], name: parts[2] };
+  if (parts[0] === 'path') {
+    const [from, next] = readEndpoint(parts, 1);
+    if (from && parts[next] === 'to') {
+      const [to] = readEndpoint(parts, next + 1);
+      if (to) return { type: 'path', from, to };
+    }
+    return null;
+  }
   if (parts[0] === 'vibe') {
     const tags = parts.slice(1).filter(Boolean);
     if (tags.length) return { type: 'vibe', tags };
@@ -127,6 +159,9 @@ function titlesFor(route, result = {}) {
   if (route.type === 'track') {
     return { title: `Songs like ${result.seedLabel || route.name}`, subtitle: `by ${result.seedArtist || route.artist}` };
   }
+  if (route.type === 'path') {
+    return { title: `From ${result.fromLabel || route.from.name} to ${result.toLabel || route.to.name}` };
+  }
   return { title: `Artists for ${formatList(route.tags)}` };
 }
 
@@ -137,7 +172,20 @@ function setTitles({ title }) {
 
 async function load(route) {
   const token = ++app.token;
-  Object.assign(app, { route, graph: null, seedId: null, seedLabel: null, selectedId: null, pathFrom: null, path: null });
+  Object.assign(app, {
+    route,
+    graph: null,
+    seedId: null,
+    seedLabel: null,
+    selectedId: null,
+    pathFrom: null,
+    path: null,
+    pathShown: false,
+    converted: null,
+    via: null,
+    artistPath: null,
+    nodeKind: route.type === 'track' || route.from?.kind === 'track' ? 'track' : 'artist',
+  });
   app.analysis = { communities: {}, sceneCount: 0, bridges: [] };
 
   $('empty').hidden = true;
@@ -173,17 +221,34 @@ async function load(route) {
     let result;
     if (route.type === 'artist') result = await buildArtistMap(route.name, ctx);
     else if (route.type === 'track') result = await buildTrackMap(route.artist, route.name, ctx);
+    else if (route.type === 'path') result = await buildPathMap(route.from, route.to, ctx, { budget: route.budget || PATH_BUDGET.default });
     else result = await buildVibeMap(route.tags, ctx);
     ctx.check();
 
     Object.assign(app, {
       graph: result.graph,
-      seedId: result.seedId,
+      seedId: result.seedId ?? null,
       seedLabel: result.seedLabel,
       seedArtist: result.seedArtist,
       estimated: Boolean(result.estimated),
+      converted: result.converted || null,
+      via: result.via || null,
+      artistPath: result.artistPath || null,
     });
     setTitles(titlesFor(route, result));
+
+    if (route.type === 'path') {
+      app.nodeKind = result.kind;
+      app.ends = result.ends;
+      view.setGraph(result.graph, { fresh: false, centerId: null });
+      app.path = result.path;
+      view.fit(true);
+      refreshAnalysis();
+      status.hide();
+      showPathPanel();
+      return;
+    }
+
     refreshAnalysis();
     status.hide();
     if (!app.selectedId) showOverview();
@@ -196,6 +261,24 @@ async function load(route) {
 function handleLoadError(err, route) {
   if (err instanceof EmptyMapError || !app.graph) {
     showEmpty({ keepStatus: true });
+  }
+  if (err instanceof PathNotFoundError) {
+    app.path = null;
+    view.setPath(null);
+    if (app.graph) showOverview();
+    const current = route.budget || PATH_BUDGET.default;
+    const atCeiling = current >= PATH_BUDGET.max;
+    // Searching wider only helps if the search stopped early, and there's a ceiling.
+    const canWiden = !err.exhausted && !atCeiling;
+    status.error(
+      canWiden || err.exhausted
+        ? err.message
+        : `${err.message} That's as far as this search goes: ${PATH_BUDGET.max} fetches, each asking one ${kindPlural().slice(0, -1)} for its similar list.`,
+      canWiden
+        ? { label: 'Keep looking', onClick: () => load({ ...route, budget: Math.min(PATH_BUDGET.max, current * 2) }) }
+        : null,
+    );
+    return;
   }
   if (err.code === 10 || err.code === 26) {
     status.error(err.message, { label: 'Open settings', onClick: () => settings.open() });
@@ -231,7 +314,7 @@ function showEmpty({ keepStatus = false } = {}) {
 
 // ---------- Describing nodes ----------
 
-const kindPlural = () => (app.route?.type === 'track' ? 'songs' : 'artists');
+const kindPlural = () => (app.nodeKind === 'track' ? 'songs' : 'artists');
 const labelOf = (id) => app.graph.getNodeAttribute(id, 'label');
 const subOf = (id) => {
   const node = app.graph.getNodeAttributes(id);
@@ -251,7 +334,26 @@ function vibeMatch(node) {
   return total > 1 ? `Tagged with ${node.matches} of your ${total} vibes` : `Tagged “${app.route.tags[0]}” on Last.fm`;
 }
 
+// On a path map there's no single seed, so position is described by the route:
+// either which step a node is, or which step it sits closest to.
+function pathRelation(id, node) {
+  if (node.anchor) {
+    return node.anchor === 'start' ? 'The start of this path.' : 'The end of this path.';
+  }
+  const step = app.path?.indexOf(id) ?? -1;
+  if (step > 0) return `Step ${step} of ${app.path.length - 1} along the path`;
+
+  let best = null;
+  app.graph.forEachNeighbor(id, (nb) => {
+    if (!app.path?.includes(nb)) return;
+    const w = app.graph.getEdgeAttribute(app.graph.edge(id, nb), 'weight');
+    if (!best || w > best.w) best = { id: nb, w };
+  });
+  return best ? `${percent(best.w)} similar to ${labelOf(best.id)}, on the path` : 'Near the path';
+}
+
 function relationText(id, node) {
+  if (app.route.type === 'path') return pathRelation(id, node);
   if (node.seed) return app.route.type === 'track' ? 'This map starts from this song.' : 'This map starts from this artist.';
   if (app.route.type === 'vibe') return vibeMatch(node);
   const w = seedWeight(id);
@@ -262,7 +364,8 @@ function relationText(id, node) {
 
 function describe(d) {
   let note = null;
-  if (d.seed) note = 'Start of this map';
+  if (app.route?.type === 'path') note = pathRelation(d.id, d);
+  else if (d.seed) note = 'Start of this map';
   else if (app.route?.type === 'vibe') note = vibeMatch(d);
   else {
     const w = seedWeight(d.id);
@@ -279,20 +382,66 @@ function showOverview() {
   const scenes = app.analysis.sceneCount;
   const titles = titlesFor(app.route, app);
   let note = null;
+  let action = null;
   if (app.estimated) {
     note = "Last.fm doesn't have song-to-song data for this track yet, so these are popular songs from similar artists.";
   } else if (app.route.type === 'vibe') {
     note = 'Bigger nodes match more of your vibe. Lines connect artists that listeners play together.';
+  } else if (app.route.type === 'path') {
+    note = app.path
+      ? `The ${kindPlural()} around each step, so you can see what the route travels through.`
+      : 'No route connected these two yet. The map shows both ends and their closest neighbors.';
   }
+  if (app.path && !app.pathShown) action = { label: 'Show the path again', onClick: showPathPanel };
   panel.showOverview({
     graph: app.graph,
     title: titles.title,
     subtitle: titles.subtitle,
     stats: `${count} ${kindPlural()}${scenes > 1 ? ` in ${scenes} scenes` : ''}`,
     note,
+    action,
     kindPlural: kindPlural(),
     bridges: app.analysis.bridges.map((id) => ({ id, label: labelOf(id), sub: subOf(id) })),
   });
+}
+
+function showPathPanel() {
+  if (!app.path) return;
+  app.selectedId = null;
+  app.pathShown = true;
+  view.select(null);
+  view.setPath(app.path);
+  panel.showPath({
+    from: labelOf(app.path[0]),
+    to: labelOf(app.path[app.path.length - 1]),
+    kindPlural: kindPlural(),
+    note: [
+      app.converted ? `${app.converted.from} isn't a song, so the path ends at ${app.converted.to}.` : null,
+      app.via === 'artists'
+        ? `Last.fm doesn't link these songs directly, so this route follows their artists (${app.artistPath.join(' → ')}) with one song from each along the way.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    steps: app.path.map((id) => ({ id, label: labelOf(id), sub: subOf(id) })),
+  });
+}
+
+const flatten = (text) =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+
+// Matches against what's already drawn, so it can answer while you type.
+function findOnMap(query) {
+  if (!app.graph || query.length < 2) return [];
+  const matches = [];
+  app.graph.forEachNode((id, attrs) => {
+    const at = flatten(`${attrs.label} ${attrs.artist || ''}`).indexOf(query);
+    if (at >= 0) matches.push({ id, label: attrs.label, artist: attrs.artist, at, score: attrs.score ?? 0 });
+  });
+  return matches.sort((a, b) => a.at - b.at || b.score - a.score).slice(0, 5);
 }
 
 function selectNode(id, { focus = false, keepPath = false } = {}) {
@@ -306,8 +455,8 @@ function selectNode(id, { focus = false, keepPath = false } = {}) {
     view.focusNode(id);
     return;
   }
-  if (app.path) {
-    app.path = null;
+  if (app.pathShown) {
+    app.pathShown = false;
     view.setPath(null);
   }
   app.selectedId = id;
@@ -321,7 +470,7 @@ function selectNode(id, { focus = false, keepPath = false } = {}) {
 
 function clearSelection() {
   if (app.pathFrom) return cancelPath();
-  if (app.path) return clearPath();
+  if (app.pathShown) return clearPath();
   if (!app.selectedId) return;
   app.selectedId = null;
   view.select(null);
@@ -349,18 +498,24 @@ async function expand(id) {
         ? `Added ${added} ${added === 1 ? noun.slice(0, -1) : noun} near ${node.label}`
         : `Everything similar to ${node.label} is already on the map`,
     );
-    if (!app.selectedId && !app.path) showOverview();
+    if (!app.selectedId && !app.pathShown) showOverview();
   } catch (err) {
     if (err instanceof StaleError) return;
     status.error(err.message);
   }
 }
 
+const endpointFor = (id) => {
+  const node = app.graph.getNodeAttributes(id);
+  return { kind: node.kind, name: node.label, artist: node.artist };
+};
+
 function startPath(id) {
   app.pathFrom = id;
   view.select(id);
   view.setPickMode(true);
-  status.info(`Select where the path from ${labelOf(id)} should end.`, {
+  search.setMode('pickEnd');
+  status.info(`Choose the other end of the path from ${labelOf(id)}: select a node, or search for anything.`, {
     duration: 0,
     action: { label: 'Cancel', onClick: cancelPath },
   });
@@ -369,32 +524,41 @@ function startPath(id) {
 function cancelPath() {
   app.pathFrom = null;
   view.setPickMode(false);
+  search.setMode('browse');
   status.hide();
 }
 
+// Picking an end that's on the current map: if a route already exists here,
+// draw it straight away rather than rebuilding the map.
 function finishPath(id) {
   const from = app.pathFrom;
-  cancelPath();
-  if (id === from) return;
-  const steps = smoothestPath(app.graph, from, id);
-  if (!steps) {
-    status.error(`${labelOf(from)} and ${labelOf(id)} aren't connected on this map yet. Grow the map from one of them, then try again.`);
+  if (id === from) {
+    cancelPath();
     return;
   }
+  const steps = smoothestPath(app.graph, from, id);
+  if (!steps) {
+    finishPathWith(endpointFor(id));
+    return;
+  }
+  cancelPath();
   app.path = steps;
-  app.selectedId = null;
-  view.select(null);
-  view.setPath(steps);
-  panel.showPath({
-    from: labelOf(from),
-    to: labelOf(id),
-    kindPlural: kindPlural(),
-    steps: steps.map((s) => ({ id: s, label: labelOf(s), sub: subOf(s) })),
-  });
+  showPathPanel();
+}
+
+// Picking an end that isn't on the map, or isn't reachable on it. The map is
+// rebuilt by growing outward from both ends until they meet.
+function finishPathWith(endpoint) {
+  const from = app.pathFrom;
+  if (!from) return;
+  const fromEndpoint = endpointFor(from);
+  cancelPath();
+  if (endpoint.id === from) return;
+  navigate({ type: 'path', from: fromEndpoint, to: endpoint });
 }
 
 function clearPath() {
-  app.path = null;
+  app.pathShown = false;
   view.setPath(null);
   showOverview();
 }
@@ -443,6 +607,9 @@ function initChrome() {
       if (type === 'artist') openArtist(a);
       if (type === 'track') openTrack(a, b);
       if (type === 'vibe') navigate({ type: 'vibe', tags: a.split(',') });
+      if (type === 'path') {
+        navigate({ type: 'path', from: { kind: 'artist', name: a }, to: { kind: 'artist', name: b } });
+      }
     });
   });
 
