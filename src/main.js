@@ -6,6 +6,9 @@ import {
   buildVibeMap,
   buildPathMap,
   expandNode,
+  attachNode,
+  artistId,
+  trackId,
   StaleError,
   EmptyMapError,
   PathNotFoundError,
@@ -58,6 +61,8 @@ const panel = createPanel($('panel'), {
   openArtist,
   selectNode,
   clearPath,
+  locate,
+  openSimilar,
 });
 
 const search = createSearch($('search'), {
@@ -478,6 +483,42 @@ function clearSelection() {
 }
 
 // ---------- Actions ----------
+
+// Where a similar-list row points, if it's already drawn.
+function locate(item) {
+  if (!app.graph) return null;
+  const id = item.kind === 'artist' ? artistId(item.name) : trackId(item.artist, item.name);
+  return app.graph.hasNode(id) ? id : null;
+}
+
+// Rows already on the map jump there; the rest get added next to the node
+// they came from, then selected so you land on what you asked for either way.
+async function openSimilar(item) {
+  const existing = locate(item);
+  if (existing) {
+    selectNode(existing, { focus: true });
+    return;
+  }
+  const hubId = app.selectedId;
+  if (!app.graph || !hubId) return;
+
+  const token = app.token;
+  status.loading(`Adding ${item.name} to the map`);
+  try {
+    const id = await attachNode(app.graph, hubId, item, {
+      check() {
+        if (token !== app.token) throw new StaleError();
+      },
+    });
+    view.setGraph(app.graph);
+    refreshAnalysis();
+    status.info(`Added ${item.name} next to ${labelOf(hubId)}`);
+    selectNode(id, { focus: true });
+  } catch (err) {
+    if (err instanceof StaleError) return;
+    status.error(err.message);
+  }
+}
 
 async function expand(id) {
   if (!app.graph?.hasNode(id)) return;

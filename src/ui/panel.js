@@ -113,6 +113,67 @@ export function createPanel(root, actions) {
     );
   }
 
+  /**
+   * The full ranked similar list, not just what the map left out. On a phone
+   * only a handful of node labels fit, so this is how you read a map without
+   * tapping every dot. Rows already on the map jump to them; rows that aren't
+   * get added, so the list doubles as a precise version of "show more like this".
+   */
+  function similarSection(node, token) {
+    const isArtist = node.kind === 'artist';
+    const heading = isArtist ? 'Similar artists' : 'Similar songs';
+    const slot = h('section', { class: 'section' }, h('h3', { text: heading }), skeletonList());
+
+    const load = isArtist
+      ? lf.similarArtists(node.label, 14).then((r) => r.items.map((a) => ({ kind: 'artist', name: a.name, match: a.match })))
+      : lf
+          .similarTracks(node.artist, node.label, 14)
+          .then((items) => items.map((t) => ({ kind: 'track', name: t.name, artist: t.artist, match: t.match })));
+
+    load
+      .then((items) => {
+        if (token !== detailToken) return;
+        if (!items.length) {
+          slot.remove();
+          return;
+        }
+        slot.replaceChildren(
+          h('h3', { text: heading }),
+          h('p', { class: 'hint', text: 'Tap one to go to it, or to add it if it isn’t on the map yet.' }),
+          h(
+            'ul',
+            { class: 'link-list' },
+            items.slice(0, 10).map((item) => {
+              const onMap = Boolean(actions.locate(item));
+              const label = item.kind === 'track' ? `${item.name} by ${item.artist}` : item.name;
+              return h(
+                'li',
+                {},
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'list-button',
+                    'aria-label': onMap ? `Go to ${label}` : `Add ${label} to the map`,
+                    onClick: () => actions.openSimilar(item),
+                  },
+                  h('span', { class: 'list-main', text: item.name }),
+                  h('span', { class: 'list-sub', text: item.kind === 'track' ? item.artist : `${Math.round(item.match * 100)}%` }),
+                  // Kept on every row so the percentages line up in a column.
+                  h('span', { class: 'list-add', html: onMap ? '' : icons.plus }),
+                ),
+              );
+            }),
+          ),
+        );
+      })
+      .catch(() => {
+        if (token === detailToken) slot.remove();
+      });
+
+    return slot;
+  }
+
   function showArtist(id, node, relation) {
     const token = ++detailToken;
     const meta = h('p', { class: 'meta', text: 'Loading details…' });
@@ -127,6 +188,7 @@ export function createPanel(root, actions) {
       meta,
       tagsSlot,
       nodeActions(id, node),
+      similarSection(node, token),
       songsSlot,
       bioSlot,
     );
@@ -193,6 +255,7 @@ export function createPanel(root, actions) {
       meta,
       tagsSlot,
       nodeActions(id, node),
+      similarSection(node, token),
       linkSlot,
     );
 

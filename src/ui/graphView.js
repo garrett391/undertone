@@ -378,7 +378,12 @@ export function createGraphView(container, handlers = {}) {
 
   // ---------- Tooltip ----------
 
+  // Touch has no hover: a tap fires mouseenter with no mouseleave to follow, so
+  // the tooltip would stick. The detail panel carries the same information.
+  const hasHover = window.matchMedia('(hover: hover)').matches;
+
   function showTip(event, d) {
+    if (!hasHover) return;
     const info = handlers.describe?.(d) || { title: d.label };
     tooltip.selectAll('*').remove();
     tooltip.append('strong').text(info.title);

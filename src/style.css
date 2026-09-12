@@ -621,6 +621,16 @@ svg.map.picking .node {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* The name takes the slack, so the columns to its right stay in line
+   regardless of how long it is. */
+.list-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .list-sub {
   flex: none;
   max-width: 50%;
@@ -649,6 +659,23 @@ svg.map.picking .node {
   color: var(--faint);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+.list-add {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  width: 15px;
+  color: var(--faint);
+}
+
+.list-add svg {
+  width: 15px;
+  height: 15px;
+}
+
+.list-button:hover .list-add {
+  color: var(--paper);
 }
 
 .bio {

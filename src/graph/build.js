@@ -282,6 +282,27 @@ export async function expandNode(g, id, ctx, limit = 10) {
   return added;
 }
 
+/**
+ * Adds one specific neighbor to the map and wires it into everything already
+ * there, without pulling in anything else. Used by the similar lists in the
+ * detail panel, where the point is to add the one you picked.
+ */
+export async function attachNode(g, hubId, item, ctx) {
+  const kind = g.getNodeAttributes(hubId).kind;
+  const id = idFor(kind, item);
+  if (!g.hasNode(id)) {
+    const hub = g.getNodeAttributes(hubId);
+    upsertNode(g, id, nodeFor(kind, item, Math.max(0.15, (hub.score ?? 0.5) * item.match), (hub.hop ?? 1) + 1));
+  }
+  upsertEdge(g, hubId, id, item.match);
+  try {
+    await expandNode(g, id, ctx, 0); // limit 0: link to existing nodes only.
+  } catch (err) {
+    rethrowStale(err); // A failed wiring pass still leaves the node on the map.
+  }
+  return id;
+}
+
 // ---------- Paths between maps ----------
 
 export class PathNotFoundError extends Error {

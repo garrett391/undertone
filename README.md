@@ -24,7 +24,8 @@ If you'd rather not paste the key, copy `.env.example` to `.env.local` and fill 
 
 - **Search** for an artist, a song, or a vibe word. Pick a vibe to add it as a chip, and add up to four to combine them, like `rainy day` + `indie folk`.
 - Anything already drawn shows up under **On this map** at the top of the results, with no network call. Picking it jumps to that node instead of starting a new map — handy once a map gets dense, or on touch where there's no hover.
-- **Hover** a node to see its neighborhood. **Click** it for details, tags, and popular songs.
+- **Hover** a node to see its neighborhood. **Click** it for details, tags, popular songs, and a ranked list of similar artists (or similar songs, on a song map).
+- That similar list is the full ranking, not only what the map drew, so it doubles as a way to read a map on a phone where few labels fit. Rows already on the map take you to them; rows that aren't have a **+** and get added right where you are, which makes "Show more like this" one at a time instead of ten.
 - **Double-click** a node (or use "Show more like this") to grow the map outward from it.
 - **Show me something different** jumps to the node farthest from the one you selected.
 - Click a tag on any artist or song to explore that vibe. Click a song under "Popular songs" to switch to a song map.
@@ -95,7 +96,11 @@ src/
 
 ## Next steps
 
+- **Next:** Collapsible detail panel on mobile. The bottom sheet takes 44% of the screen, and there's no way to get it out of the way to see more of the map. Wants a drag handle with snap points (peek / half / full), the map insets updating as it moves.
+- **Small:** The seed node's label always draws, even when it overlaps a neighbor — it skips the collision check in `updateLabels` so it can never be hidden. It should push nearby labels aside instead.
+- **Next:** Show play counts alongside the artist name in song search results. Last.fm's `track.search` already returns `listeners`, so this is small — it's used for artist results but not song ones today. It makes duplicates easy to tell apart: "DENIAL IS A RIVER" vs. "DENIAL IS A RIVER [Explicit]" vs. a one-off upload. Later, Spotify's ISRC codes can merge them outright.
+- **Next:** Turn a path into a playlist. A finished route is already an ordered list of songs, so it wants a "Create playlist" button (saved to Spotify via the Create Playlist endpoint) and an "Add to queue" for listening right away. Needs v2's Spotify login first.
 - **v2:** Spotify login (PKCE, with `http://127.0.0.1:5173` as the redirect URI), album art, key and BPM from ReccoBeats, and the Camelot wheel track view.
-- **v3:** Playlist builder with smooth transitions, saved to Spotify.
+- **v3:** Playlist builder with smooth transitions, saved to Spotify. Key and tempo join the song-picking score, which today runs on co-listening and tags alone.
 - **Stretch:** Run two searches on one canvas at once, to see whether — and how — they connect. Bigger lift: today's layout and coloring both assume a single seed per map.
 - **Later:** An LLM or local embeddings to turn free-text vibes like "forest green focus" into Last.fm tags.
