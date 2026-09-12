@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Undertone</title>
+    <meta name="description" content="Explore artists and songs as a map of how they sound together." />
+    <meta name="theme-color" content="#0B0D18" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230B0D18'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%239FA8FF' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23F4F2FA'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="map" class="map-wrap"></div>
+
+    <section id="empty" class="empty" hidden>
+      <div class="empty-inner">
+        <div class="empty-copy">
+          <h1>Start with an artist, a song, or a vibe.</h1>
+          <p>
+            Undertone maps music from what millions of Last.fm listeners play together. Similar sounds sit close
+            and share colors.
+          </p>
+          <div class="examples">
+            <button type="button" class="example" data-example="artist|Bon Iver">
+              <span class="example-kind">Artist</span>Bon Iver
+            </button>
+            <button type="button" class="example" data-example="track|Massive Attack|Teardrop">
+              <span class="example-kind">Song</span>Teardrop by Massive Attack
+            </button>
+            <button type="button" class="example" data-example="vibe|rainy day,ambient">
+              <span class="example-kind">Vibe</span>rainy day and ambient
+            </button>
+          </div>
+        </div>
+        <svg id="empty-art" class="empty-art" aria-hidden="true"></svg>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <div class="brand-row">
+        <span class="wordmark"><span class="spectrum-dot" aria-hidden="true"></span>undertone</span>
+        <button id="settings-button" class="icon-button" type="button" aria-label="Settings"></button>
+      </div>
+      <div id="search" class="search" role="search"></div>
+      <nav id="crumb" class="crumb" aria-label="Current map" hidden>
+        <button id="back" class="icon-button" type="button" aria-label="Go back"></button>
+        <span id="map-title"></span>
+      </nav>
+    </header>
+
+    <aside id="panel" class="panel" aria-label="Details" hidden></aside>
+
+    <div id="controls" class="map-controls" hidden>
+      <div class="zoom">
+        <button id="zoom-in" class="icon-button" type="button" aria-label="Zoom in"></button>
+        <button id="zoom-out" class="icon-button" type="button" aria-label="Zoom out"></button>
+        <button id="zoom-fit" class="icon-button" type="button" aria-label="Fit the map to the screen"></button>
+      </div>
+      <p class="legend"><span class="spectrum-dot" aria-hidden="true"></span>Closer colors, closer sound</p>
+    </div>
+
+    <div id="status" class="status" hidden></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
