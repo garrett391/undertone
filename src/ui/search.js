@@ -81,7 +81,12 @@ export function createSearch(root, { onPickArtist, onPickTrack, onPickNode, onPi
               onClick: () => pick(item),
               onMousemove: () => setActive(index),
             },
-            h('span', { class: 'option-main', text: item.primary }),
+            h(
+              'span',
+              { class: 'option-main' },
+              h('span', { class: 'option-name', text: item.primary }),
+              item.detail ? h('span', { class: 'option-detail', text: item.detail }) : null,
+            ),
             item.secondary ? h('span', { class: 'option-sub', text: item.secondary }) : null,
           ),
         );
@@ -175,9 +180,18 @@ export function createSearch(root, { onPickArtist, onPickTrack, onPickNode, onPi
           secondary: a.listeners ? `${formatCount(a.listeners)} listeners` : '',
         })),
       };
+      // Listener counts tell apart versions that share a name: a remaster, an
+      // explicit edit, and a stray upload all look identical without them.
       const songGroup = {
         label: 'Songs',
-        items: tracks.map((t) => ({ type: 'track', name: t.name, artist: t.artist, primary: t.name, secondary: t.artist })),
+        items: tracks.map((t) => ({
+          type: 'track',
+          name: t.name,
+          artist: t.artist,
+          primary: t.name,
+          detail: t.artist,
+          secondary: t.listeners ? `${formatCount(t.listeners)} listeners` : '',
+        })),
       };
       const onMap = new Set(mapGroup.items.map(keyOf));
       artistGroup.items = artistGroup.items.filter((i) => !onMap.has(keyOf(i)));

@@ -419,7 +419,34 @@ function showOverview() {
     action,
     kindPlural: kindPlural(),
     bridges: app.analysis.bridges.map((id) => ({ id, label: labelOf(id), sub: subOf(id) })),
+    ...rankedList(),
   });
+}
+
+// The whole map as a ranked list, for reading it without tapping every dot.
+// Path maps skip this: their route list is already the reading order.
+function rankedList() {
+  if (app.route.type === 'path') return {};
+  const vibe = app.route.type === 'vibe';
+  const rows = [];
+  app.graph.forEachNode((id, attrs) => {
+    if (attrs.seed) return;
+    let sub = null;
+    if (vibe) {
+      if (attrs.matches) sub = app.route.tags.length > 1 ? `${attrs.matches} of ${app.route.tags.length} vibes` : null;
+    } else {
+      const w = seedWeight(id);
+      sub = w != null ? percent(w) : attrs.kind === 'track' ? attrs.artist : null;
+    }
+    rows.push({ id, label: attrs.label, sub, score: attrs.score ?? 0 });
+  });
+  rows.sort((a, b) => b.score - a.score);
+  return {
+    everyone: rows,
+    everyoneHint: vibe
+      ? 'Strongest matches for your vibe first.'
+      : `Closest to ${app.seedLabel} first. Tap one to go to it.`,
+  };
 }
 
 function showPathPanel() {

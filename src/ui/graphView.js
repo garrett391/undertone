@@ -352,27 +352,37 @@ export function createGraphView(container, handlers = {}) {
       })
       .sort((a, b) => priority(b) - priority(a));
 
-    // Greedy label placement: higher-priority labels claim space first, and a
-    // label that would overlap one already placed stays hidden until you zoom in.
+    // Greedy label placement: higher-priority labels claim space first. Each
+    // label tries below its node, then above; if both collide with a node or a
+    // placed label it stays hidden until you zoom in. The seed, hover, and
+    // selection must always show, so they take the less-crowded side and,
+    // failing that, draw below anyway.
     const placed = [];
     const shown = new Set();
     const circles = nodes.map((n) => ({ id: n.id, x0: n.x - n.r, x1: n.x + n.r, y0: n.y - n.r, y1: n.y + n.r }));
+    const textH = size * 1.15;
     for (const d of wanted) {
       const text = truncate(d.label, 26);
       const w = text.length * size * 0.56;
-      const box = { x0: d.x - w / 2, x1: d.x + w / 2, y0: d.y + d.r + 3, y1: d.y + d.r + 3 + size * 1.15 };
-      const hits = (b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0;
-      const overlaps = placed.some(hits) || circles.some((c) => c.id !== d.id && hits(c));
-      if (!overlaps || priority(d) >= 2) {
-        placed.push(box);
+      const below = { x0: d.x - w / 2, x1: d.x + w / 2, y0: d.y + d.r + 3, y1: d.y + d.r + 3 + textH, side: 'below' };
+      const above = { x0: below.x0, x1: below.x1, y0: d.y - d.r - 3 - textH, y1: d.y - d.r - 3, side: 'above' };
+      const clash = (box) => {
+        const hits = (b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0;
+        return placed.some(hits) || circles.some((c) => c.id !== d.id && hits(c));
+      };
+      let pick = [below, above].find((box) => !clash(box));
+      if (!pick && priority(d) >= 2) pick = below;
+      if (pick) {
+        placed.push(pick);
         shown.add(d.id);
+        d.labelSide = pick.side;
       }
     }
 
     nodeSel
       .select('text.label')
       .attr('font-size', size.toFixed(2))
-      .attr('y', (d) => d.r + size + 3)
+      .attr('y', (d) => (d.labelSide === 'above' ? -(d.r + 5) : d.r + size + 3))
       .classed('shown', (d) => shown.has(d.id));
   }
 

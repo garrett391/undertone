@@ -29,7 +29,9 @@ If you'd rather not paste the key, copy `.env.example` to `.env.local` and fill 
 - **Double-click** a node (or use "Show more like this") to grow the map outward from it.
 - **Show me something different** jumps to the node farthest from the one you selected.
 - Click a tag on any artist or song to explore that vibe. Click a song under "Popular songs" to switch to a song map.
-- On a phone, the details panel is a bottom sheet. Drag the grip at its top to resize it, or tap the grip to collapse it to just the title and get most of the screen back for the map. It rests at three heights: peek, half, and full. Selecting something brings it back up from peek; tapping empty map doesn't.
+- The overview panel lists everything on the map, ranked by how close it is to your starting point. Tap a row to go to that node. With the similar list on each node, that's the whole map readable as text.
+- Song search results show the artist under the name and a listener count on the right, so a remaster, an explicit edit, and a stray upload with the same title are easy to tell apart.
+- On a phone, the details panel is a bottom sheet. Drag the grip at its top to resize it, or tap the grip to collapse it down to the grip alone and get nearly the whole screen for the map. It rests at three heights: peek, half, and full. Selecting something brings it back up from peek; tapping empty map doesn't.
 - Press `/` to jump to search and `Esc` to clear a selection. The browser's back button works, and every map has its own URL you can bookmark.
 
 ### Paths
@@ -98,8 +100,6 @@ src/
 
 ## Next steps
 
-- **Small:** The seed node's label always draws, even when it overlaps a neighbor — it skips the collision check in `updateLabels` so it can never be hidden. It should push nearby labels aside instead.
-- **Next:** Show play counts alongside the artist name in song search results. Last.fm's `track.search` already returns `listeners`, so this is small — it's used for artist results but not song ones today. It makes duplicates easy to tell apart: "DENIAL IS A RIVER" vs. "DENIAL IS A RIVER [Explicit]" vs. a one-off upload. Later, Spotify's ISRC codes can merge them outright.
 - **Next:** Turn a path into a playlist. A finished route is already an ordered list of songs, so it wants a "Create playlist" button (saved to Spotify via the Create Playlist endpoint) and an "Add to queue" for listening right away. Needs v2's Spotify login first.
 - **v2:** Spotify login (PKCE, with `http://127.0.0.1:5173` as the redirect URI), album art, key and BPM from ReccoBeats, and the Camelot wheel track view.
 - **v3:** Playlist builder with smooth transitions, saved to Spotify. Key and tempo join the song-picking score, which today runs on co-listening and tags alone.

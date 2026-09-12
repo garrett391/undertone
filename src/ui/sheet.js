@@ -14,7 +14,7 @@ export function createSheet(panelEl, { onSnap } = {}) {
   const small = window.matchMedia('(max-width: 759px)');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const ORDER = ['peek', 'half', 'full'];
-  const PEEK = 96;
+  const PEEK = 56; // Grip only; the breadcrumb above the map already names the map.
 
   const handle = h(
     'div',

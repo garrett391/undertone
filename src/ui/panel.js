@@ -81,6 +81,30 @@ export function createPanel(root, actions) {
             ),
           )
         : null,
+      map.everyone?.length
+        ? h(
+            'section',
+            { class: 'section' },
+            h('h3', { text: `Everything on this map` }),
+            h('p', { class: 'hint', text: map.everyoneHint }),
+            h(
+              'ul',
+              { class: 'link-list' },
+              map.everyone.map((n) =>
+                h(
+                  'li',
+                  {},
+                  h(
+                    'button',
+                    { type: 'button', class: 'list-button', onClick: () => actions.selectNode(n.id, { focus: true }) },
+                    h('span', { class: 'list-main', text: n.label }),
+                    n.sub ? h('span', { class: 'list-sub', text: n.sub }) : null,
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null,
       h(
         'p',
         { class: 'hint help' },

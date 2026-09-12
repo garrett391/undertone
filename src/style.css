@@ -220,7 +220,7 @@ svg.map.picking .node {
   position: fixed;
   top: 20px;
   left: 20px;
-  z-index: 10;
+  z-index: 12; /* Above the panel, controls, and status, so search results are never covered. */
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -371,9 +371,21 @@ svg.map.picking .node {
 }
 
 .option-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.option-name,
+.option-detail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.option-detail {
+  color: var(--mist);
+  font-size: 13px;
 }
 
 .option-sub {
@@ -1025,6 +1037,7 @@ dialog .hint {
     flex-direction: column;
     width: auto;
     height: var(--sheet-h, 44dvh);
+    overflow: visible; /* So the handle's reach above the edge isn't clipped. */
     border-bottom: 0;
     border-radius: 20px 20px 0 0;
     transition: height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1035,16 +1048,27 @@ dialog .hint {
     transition: none;
   }
 
-  /* The grab strip. Generous hit area, small visible grip. */
+  /* The grab strip: a tall hit area with a small visible grip, plus a strip
+     that reaches above the sheet's edge so a slightly-high thumb still catches. */
   .sheet-handle {
+    position: relative;
     display: grid;
     flex: none;
     place-items: center;
-    height: 28px;
+    height: 44px;
     cursor: grab;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+  }
+
+  .sheet-handle::before {
+    content: '';
+    position: absolute;
+    top: -14px;
+    left: 0;
+    right: 0;
+    height: 14px;
   }
 
   .sheet-handle:active {
@@ -1069,7 +1093,7 @@ dialog .hint {
   }
 
   .panel-body {
-    padding-top: 12px;
+    padding-top: 4px;
   }
 
   /* At peek only the title shows; scrolling a sliver would be confusing. */
